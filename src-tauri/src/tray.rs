@@ -37,6 +37,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayHandles> {
             &MenuItem::with_id(app, "size:large", "크게", true, None::<&str>)?,
         ],
     )?;
+    let help = MenuItem::with_id(app, "help", "사용법 보기", true, None::<&str>)?;
     let reset = MenuItem::with_id(app, "reset", "새 알로 다시 시작…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Mochi Pocket 종료", true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
@@ -51,6 +52,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayHandles> {
             &sound,
             &size,
             &sep()?,
+            &help,
             &reset,
             &sep()?,
             &quit,
@@ -79,9 +81,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayHandles> {
                 let on = sound_item.is_checked().unwrap_or(true);
                 let _ = app.emit("tray://action", format!("sound:{}", on));
             }
-            "reset" => {
+            "reset" | "help" => {
                 show_main(app);
-                let _ = app.emit("tray://action", "reset");
+                let _ = app.emit("tray://action", event.id().as_ref());
             }
             id if id.starts_with("size:") => {
                 show_main(app);

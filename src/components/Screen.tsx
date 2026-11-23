@@ -5,6 +5,7 @@ import { ICONS } from "@/game/sprites";
 import { MENU, useGame } from "@/store/gameStore";
 import { PixelIcon } from "./PixelIcon";
 import { StatusView } from "./StatusView";
+import { TutorialView } from "./TutorialView";
 
 const HALF_WIDTH = { egg: 7, baby: 7, child: 9, hood: 11, plain: 11 } as const;
 
@@ -16,6 +17,7 @@ export function Screen() {
   const menuIndex = useGame((s) => s.menuIndex);
   const view = useGame((s) => s.view);
   const statusPage = useGame((s) => s.statusPage);
+  const tutorialPage = useGame((s) => s.tutorialPage);
   const pet = useGame((s) => s.pet);
   const patPet = useGame((s) => s.patPet);
 
@@ -78,7 +80,9 @@ export function Screen() {
     <div className="screen" onClick={patPet}>
       <canvas ref={canvasRef} width={SCREEN} height={SCREEN} className="pixel lcd" />
 
-      {view === "status" ? (
+      {view === "tutorial" ? (
+        <TutorialView page={tutorialPage} />
+      ) : view === "status" ? (
         <StatusView pet={pet} page={statusPage} />
       ) : (
         <>

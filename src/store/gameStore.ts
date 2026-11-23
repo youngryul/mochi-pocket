@@ -25,6 +25,8 @@ export const SIZE_SCALE: Record<Size, number> = { small: 0.8, normal: 1, large: 
 export interface Settings {
   sound: boolean;
   size: Size;
+  /** False until the player has gone through (or skipped) the how-to-play pages. */
+  seenTutorial: boolean;
 }
 
 export const MENU: { id: ActionId; label: string }[] = [
@@ -38,8 +40,9 @@ export const MENU: { id: ActionId; label: string }[] = [
 ];
 
 const GAME_ROUNDS = 5;
+export const TUTORIAL_PAGES = 6;
 
-export type View = "home" | "status" | "game" | "confirmReset";
+export type View = "home" | "status" | "game" | "confirmReset" | "tutorial";
 
 export interface MiniGame {
   round: number; // 1-based
@@ -63,6 +66,7 @@ interface GameStore {
   menuOpen: boolean;
   menuIndex: number;
   statusPage: number;
+  tutorialPage: number;
   bubble: { text: string; until: number } | null;
   expression: Expression;
   expressionUntil: number;
@@ -190,14 +194,29 @@ export const useGame = create<GameStore>((set, get) => {
     scheduleSave(get, 0);
   };
 
+  const turnTutorialPage = (delta: 1 | -1) => {
+    const { tutorialPage } = get();
+    const next = tutorialPage + delta;
+    if (next < 0) return;
+    if (next >= TUTORIAL_PAGES) return closeTutorial();
+    set({ tutorialPage: next });
+  };
+
+  const closeTutorial = () => {
+    sfx.ok();
+    set({ view: "home", tutorialPage: 0, settings: { ...get().settings, seenTutorial: true } });
+    scheduleSave(get, 0);
+  };
+
   return {
     loaded: false,
     pet: newEgg(Date.now()),
-    settings: { sound: true, size: "normal" },
+    settings: { sound: true, size: "normal", seenTutorial: false },
     view: "home",
     menuOpen: false,
     menuIndex: 0,
     statusPage: 0,
+    tutorialPage: 0,
     bubble: null,
     expression: null,
     expressionUntil: 0,
@@ -222,9 +241,10 @@ export const useGame = create<GameStore>((set, get) => {
       }
       setSoundEnabled(settings.sound);
       void setTraySound(settings.sound);
+      const firstVisit = settings.seenTutorial ? {} : { view: "tutorial" as View, tutorialPage: 0 };
 
       if (!pet) {
-        set({ loaded: true, pet: newEgg(now), settings, ...say("알을 하나 주웠어요! 곧 태어날 거예요", 5000) });
+        set({ loaded: true, pet: newEgg(now), settings, ...firstVisit, ...say("알을 하나 주웠어요! 곧 태어날 거예요", 5000) });
         scheduleSave(get, 0);
         return;
       }
@@ -236,7 +256,7 @@ export const useGame = create<GameStore>((set, get) => {
         : away > 60 * 60_000
           ? `보고 싶었어! ${Math.round(away / 3_600_000)}시간 만이야`
           : "또 왔네! 반가워";
-      set({ loaded: true, pet: state, settings, ...(greeting ? say(greeting) : {}) });
+      set({ loaded: true, pet: state, settings, ...firstVisit, ...(greeting ? say(greeting) : {}) });
       scheduleSave(get, 0);
     },
 
@@ -279,12 +299,14 @@ export const useGame = create<GameStore>((set, get) => {
     pressA() {
       const s = get();
       sfx.button();
-      if (s.pet.gone) return;
+      if (s.pet.gone && s.view !== "tutorial") return;
       switch (s.view) {
         case "status":
           return set({ statusPage: (s.statusPage + 1) % 2 });
         case "game":
           return guess(-1);
+        case "tutorial":
+          return turnTutorialPage(-1);
         case "confirmReset":
           return;
         default:
@@ -295,13 +317,16 @@ export const useGame = create<GameStore>((set, get) => {
 
     pressB() {
       const s = get();
-      if (s.pet.gone) return startNewEgg();
+      if (s.pet.gone && s.view !== "tutorial") return startNewEgg();
       switch (s.view) {
         case "status":
           sfx.button();
           return set({ statusPage: (s.statusPage + 1) % 2 });
         case "game":
           return;
+        case "tutorial":
+          sfx.button();
+          return turnTutorialPage(1);
         case "confirmReset":
           return startNewEgg();
         default:
@@ -318,6 +343,8 @@ export const useGame = create<GameStore>((set, get) => {
           return set({ view: "home" });
         case "game":
           return guess(1);
+        case "tutorial":
+          return closeTutorial();
         case "confirmReset":
           return set({ view: "home", bubble: null });
         default:
@@ -347,6 +374,10 @@ export const useGame = create<GameStore>((set, get) => {
     },
 
     trayAction(action) {
+      if (action === "help") {
+        if (get().view === "game") return;
+        return set({ view: "tutorial", tutorialPage: 0, menuOpen: false });
+      }
       if (action === "reset") {
         return set({
           view: "confirmReset",
